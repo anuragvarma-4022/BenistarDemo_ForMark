@@ -35,3 +35,10 @@ public class RetireeBenefit
     public Retiree? Retiree { get; set; }
     public Benefit? Benefit { get; set; }
 }
+
+public class EnrollmentRequest
+{
+    public int BenefitId { get; set; }
+    public DateTime CoverageStartDate { get; set; }
+    public DateTime? CoverageEndDate { get; set; }
+}

@@ -1,0 +1,407 @@
+@page "/enrollments"
+@using Benistar.Shared
+@inject HttpClient Http
+
+<PageTitle>Retiree Enrollments</PageTitle>
+
+<h1>Retiree Enrollments</h1>
+
+<ConfirmModal 
+    IsVisible="showDeleteModal" 
+    Title="Remove Enrollment" 
+    Message="@deleteModalMessage" 
+    ConfirmText="Remove" 
+    CancelText="Cancel" 
+    Type="ConfirmModal.ModalType.Danger"
+    OnConfirmed="ConfirmDelete" 
+    OnCancelled="CancelDelete" />
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @successMessage
+        <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @errorMessage
+        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+    </div>
+}
+
+@if (retirees == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!retirees.Any())
+{
+    <p>No retirees found.</p>
+}
+else
+{
+    <div class="accordion" id="retireeAccordion">
+        @foreach (var retiree in retirees)
+        {
+            var collapseId = $"collapse-{retiree.RetireeId}";
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" 
+                            type="button" 
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#@collapseId"
+                            @onclick="() => LoadEnrollments(retiree.RetireeId)">
+                        @retiree.FirstName @retiree.LastName
+                        @if (enrollmentsByRetiree.ContainsKey(retiree.RetireeId))
+                        {
+                            <span class="badge bg-primary ms-2">@enrollmentsByRetiree[retiree.RetireeId].Count plans</span>
+                        }
+                    </button>
+                </h2>
+                <div id="@collapseId" 
+                     class="accordion-collapse collapse" 
+                     data-bs-parent="#retireeAccordion">
+                    <div class="accordion-body">
+                        @if (loadingEnrollments.Contains(retiree.RetireeId))
+                        {
+                            <p><em>Loading enrollments...</em></p>
+                        }
+                        else if (enrollmentsByRetiree.ContainsKey(retiree.RetireeId))
+                        {
+                            var enrollments = enrollmentsByRetiree[retiree.RetireeId];
+                            @if (enrollments.Any())
+                            {
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Plan Name</th>
+                                                <th>Type</th>
+                                                <th>Provider</th>
+                                                <th>Monthly Premium</th>
+                                                <th>Coverage Start</th>
+                                                <th>Coverage End</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var enrollment in enrollments)
+                                            {
+                                                <tr>
+                                                    <td>@enrollment.Benefit?.BenefitName</td>
+                                                    <td>@enrollment.Benefit?.BenefitType</td>
+                                                    <td>@enrollment.Benefit?.ProviderName</td>
+                                                    <td>@enrollment.Benefit?.MonthlyPremium.ToString("C")</td>
+                                                    <td>@enrollment.CoverageStartDate.ToShortDateString()</td>
+                                                    <td>@(enrollment.CoverageEndDate?.ToShortDateString() ?? "Ongoing")</td>
+                                                    <td>
+                                                        <button class="btn btn-danger btn-sm" 
+                                                                @onclick="() => ShowDeleteModal(enrollment.RetireeBenefitId, retiree.FirstName, retiree.LastName, enrollment.Benefit?.BenefitName ?? string.Empty)">
+                                                            Remove
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <p>No active enrollments.</p>
+                            }
+                            <button class="btn btn-primary" @onclick="() => ShowEnrollModal(retiree.RetireeId, retiree.FirstName, retiree.LastName)">
+                                <span class="bi bi-plus-circle"></span> Enroll in Benefits
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (showEnrollModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Enroll @selectedRetireeInfo in Benefits</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelEnroll"></button>
+                </div>
+                <div class="modal-body">
+                    @if (availableBenefits == null)
+                    {
+                        <p><em>Loading benefits...</em></p>
+                    }
+                    else if (!availableBenefits.Any())
+                    {
+                        <p>No benefits available for enrollment.</p>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Select Benefits:</label>
+                            @foreach (var benefit in availableBenefits)
+                            {
+                                var isEnrolled = alreadyEnrolledBenefitIds.Contains(benefit.BenefitId);
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="benefit-@benefit.BenefitId"
+                                           checked="@isEnrolled"
+                                           @onchange="e => ToggleBenefitSelection(benefit.BenefitId, e.Value)">
+                                    <label class="form-check-label" for="benefit-@benefit.BenefitId">
+                                        @benefit.BenefitName (@benefit.BenefitType) - @benefit.MonthlyPremium.ToString("C")/month
+                                        @if (isEnrolled)
+                                        {
+                                            <span class="badge bg-success ms-1">Already Enrolled</span>
+                                        }
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Coverage Start Date:</label>
+                                <input type="date" class="form-control" @bind="enrollStartDate" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Coverage End Date (Optional):</label>
+                                <input type="date" class="form-control" @bind="enrollEndDate" />
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(enrollModalError))
+                        {
+                            <div class="alert alert-danger">@enrollModalError</div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelEnroll">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="ConfirmEnroll" disabled="@(!selectedBenefitIds.Any())">
+                        Enroll in @selectedBenefitIds.Count Benefit(s)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private List<Retiree>? retirees;
+    private Dictionary<int, List<RetireeBenefit>> enrollmentsByRetiree = new();
+    private HashSet<int> loadingEnrollments = new();
+    private List<Benefit>? availableBenefits;
+    
+    private string? errorMessage;
+    private string? successMessage;
+    
+    private bool showDeleteModal = false;
+    private int selectedEnrollmentId;
+    private string deleteModalMessage = "";
+    
+    private bool showEnrollModal = false;
+    private int selectedRetireeId;
+    private string selectedRetireeInfo = "";
+    private HashSet<int> selectedBenefitIds = new();
+    private HashSet<int> alreadyEnrolledBenefitIds = new();
+    private DateTime? enrollStartDate = DateTime.Today;
+    private DateTime? enrollEndDate;
+    private string? enrollModalError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRetirees();
+    }
+
+    private async Task LoadRetirees()
+    {
+        try
+        {
+            retirees = await Http.GetFromJsonAsync<List<Retiree>>("api/retirees");
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading retirees: {ex.Message}");
+            errorMessage = "Failed to load retirees. Please try again.";
+            retirees = new List<Retiree>();
+        }
+    }
+
+    private async Task LoadEnrollments(int retireeId)
+    {
+        if (enrollmentsByRetiree.ContainsKey(retireeId))
+            return;
+
+        loadingEnrollments.Add(retireeId);
+        try
+        {
+            var enrollments = await Http.GetFromJsonAsync<List<RetireeBenefit>>($"api/retirees/{retireeId}/benefits");
+            enrollmentsByRetiree[retireeId] = enrollments ?? new List<RetireeBenefit>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading enrollments: {ex.Message}");
+            enrollmentsByRetiree[retireeId] = new List<RetireeBenefit>();
+        }
+        finally
+        {
+            loadingEnrollments.Remove(retireeId);
+        }
+    }
+
+    private void ShowDeleteModal(int enrollmentId, string firstName, string lastName, string benefitName)
+    {
+        selectedEnrollmentId = enrollmentId;
+        deleteModalMessage = $"Are you sure you want to remove {firstName} {lastName} from {benefitName}? This action cannot be undone.";
+        showDeleteModal = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        showDeleteModal = false;
+        
+        try
+        {
+            var response = await Http.DeleteAsync($"api/retireebenefits/{selectedEnrollmentId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Enrollment has been removed successfully.";
+                errorMessage = null;
+                
+                // Refresh enrollments for all loaded retirees
+                var loadedRetireeIds = enrollmentsByRetiree.Keys.ToList();
+                enrollmentsByRetiree.Clear();
+                foreach (var retireeId in loadedRetireeIds)
+                {
+                    await LoadEnrollments(retireeId);
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to remove enrollment. Please try again.";
+                successMessage = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting enrollment: {ex.Message}");
+            errorMessage = "An error occurred while removing the enrollment.";
+            successMessage = null;
+        }
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteModal = false;
+    }
+
+    private async Task ShowEnrollModal(int retireeId, string firstName, string lastName)
+    {
+        selectedRetireeId = retireeId;
+        selectedRetireeInfo = $"{firstName} {lastName}";
+        selectedBenefitIds.Clear();
+        alreadyEnrolledBenefitIds.Clear();
+        enrollStartDate = DateTime.Today;
+        enrollEndDate = null;
+        enrollModalError = null;
+        showEnrollModal = true;
+        
+        try
+        {
+            // Load all active benefits
+            var allBenefits = await Http.GetFromJsonAsync<List<Benefit>>("api/benefits");
+            availableBenefits = allBenefits?.Where(b => b.IsActive).ToList();
+            
+            // Track already enrolled benefit IDs
+            if (enrollmentsByRetiree.ContainsKey(retireeId))
+            {
+                alreadyEnrolledBenefitIds = enrollmentsByRetiree[retireeId]
+                    .Select(e => e.BenefitId)
+                    .ToHashSet();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading benefits: {ex.Message}");
+            enrollModalError = "Failed to load benefits.";
+        }
+    }
+
+    private void ToggleBenefitSelection(int benefitId, object? isChecked)
+    {
+        if (isChecked is bool checkedValue && checkedValue)
+        {
+            selectedBenefitIds.Add(benefitId);
+        }
+        else
+        {
+            selectedBenefitIds.Remove(benefitId);
+        }
+    }
+
+    private async Task ConfirmEnroll()
+    {
+        enrollModalError = null;
+
+        // Validate dates
+        if (!enrollStartDate.HasValue)
+        {
+            enrollModalError = "Coverage start date is required.";
+            return;
+        }
+
+        if (enrollEndDate.HasValue && enrollEndDate.Value <= enrollStartDate.Value)
+        {
+            enrollModalError = "Coverage end date must be after start date.";
+            return;
+        }
+
+        try
+        {
+            var enrollments = selectedBenefitIds.Select(benefitId => new EnrollmentRequest
+            {
+                BenefitId = benefitId,
+                CoverageStartDate = enrollStartDate.Value,
+                CoverageEndDate = enrollEndDate
+            }).ToList();
+
+            var response = await Http.PostAsJsonAsync($"api/retirees/{selectedRetireeId}/benefits/enroll", enrollments);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = $"Successfully enrolled in {selectedBenefitIds.Count} benefit(s).";
+                errorMessage = null;
+                showEnrollModal = false;
+                
+                // Refresh enrollments
+                enrollmentsByRetiree.Remove(selectedRetireeId);
+                await LoadEnrollments(selectedRetireeId);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                enrollModalError = $"Failed to enroll: {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error enrolling: {ex.Message}");
+            enrollModalError = "An error occurred while enrolling.";
+        }
+    }
+
+    private void CancelEnroll()
+    {
+        showEnrollModal = false;
+    }
+}

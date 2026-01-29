@@ -1,0 +1,189 @@
+@page "/benefits"
+@using Benistar.Shared
+@inject HttpClient Http
+
+<PageTitle>Benefit Plans</PageTitle>
+
+<h1>Benefit Plans</h1>
+
+<ConfirmModal 
+    IsVisible="showDeleteModal" 
+    Title="Delete Benefit" 
+    Message="@deleteModalMessage" 
+    ConfirmText="Delete" 
+    CancelText="Cancel" 
+    Type="ConfirmModal.ModalType.Danger"
+    OnConfirmed="ConfirmDelete" 
+    OnCancelled="CancelDelete" />
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @successMessage
+        <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @errorMessage
+        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+    </div>
+}
+
+@if (benefits == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!benefits.Any())
+{
+    <p>No benefits found.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Plan Name</th>
+                    <th>Type</th>
+                    <th>Provider</th>
+                    <th>Monthly Premium</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var benefit in benefits)
+                {
+                    <tr>
+                        <td>@benefit.BenefitName</td>
+                        <td>@benefit.BenefitType</td>
+                        <td>@benefit.ProviderName</td>
+                        <td>@benefit.MonthlyPremium.ToString("C")</td>
+                        <td>
+                            @if (benefit.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactive</span>
+                            }
+                        </td>
+                        <td>
+                            @if (benefit.IsActive)
+                            {
+                                <button class="btn btn-danger btn-sm" @onclick="() => ShowDeleteModal(benefit.BenefitId, benefit.BenefitName)">
+                                    Delete
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-success btn-sm" @onclick="() => UndeleteBenefit(benefit.BenefitId)">
+                                    Restore
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Benefit>? benefits;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool showDeleteModal = false;
+    private int selectedBenefitId;
+    private string deleteModalMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBenefits();
+    }
+
+    private async Task LoadBenefits()
+    {
+        try
+        {
+            benefits = await Http.GetFromJsonAsync<List<Benefit>>("api/benefits");
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading benefits: {ex.Message}");
+            errorMessage = "Failed to load benefits. Please try again.";
+            benefits = new List<Benefit>();
+        }
+    }
+
+    private void ShowDeleteModal(int benefitId, string benefitName)
+    {
+        selectedBenefitId = benefitId;
+        deleteModalMessage = $"Are you sure you want to delete {benefitName}? This will mark it as inactive.";
+        showDeleteModal = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        showDeleteModal = false;
+        
+        try
+        {
+            var response = await Http.DeleteAsync($"api/benefits/{selectedBenefitId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Benefit has been deleted successfully.";
+                errorMessage = null;
+                await LoadBenefits();
+            }
+            else
+            {
+                errorMessage = "Failed to delete benefit. Please try again.";
+                successMessage = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting benefit: {ex.Message}");
+            errorMessage = "An error occurred while deleting the benefit.";
+            successMessage = null;
+        }
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteModal = false;
+    }
+
+    private async Task UndeleteBenefit(int benefitId)
+    {
+        try
+        {
+            var response = await Http.PutAsync($"api/benefits/{benefitId}/undelete", null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Benefit has been restored successfully.";
+                errorMessage = null;
+                await LoadBenefits();
+            }
+            else
+            {
+                errorMessage = "Failed to restore benefit. Please try again.";
+                successMessage = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error restoring benefit: {ex.Message}");
+            errorMessage = "An error occurred while restoring the benefit.";
+            successMessage = null;
+        }
+    }
+}
