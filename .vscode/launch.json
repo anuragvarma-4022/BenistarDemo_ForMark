@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch API",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-api",
+            "program": "${workspaceFolder}/Benistar.Api/bin/Debug/net9.0/Benistar.Api.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Benistar.Api",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            }
+        },
+        {
+            "name": "Launch Blazor Web",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-blazorweb",
+            "program": "${workspaceFolder}/Benistar.BlazorWeb/bin/Debug/net9.0/Benistar.BlazorWeb.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Benistar.BlazorWeb",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+                "uriFormat": "%s/retirees"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Launch API + Blazor Web",
+            "configurations": ["Launch API", "Launch Blazor Web"],
+            "stopAll": true,
+            "presentation": {
+                "hidden": false,
+                "group": "Full Stack",
+                "order": 1
+            }
+        }
+    ]
+}

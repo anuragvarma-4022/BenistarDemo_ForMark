@@ -1,0 +1,189 @@
+@page "/retirees"
+@using Benistar.Shared
+@inject HttpClient Http
+
+<PageTitle>Retirees</PageTitle>
+
+<h1>Retirees</h1>
+
+<ConfirmModal 
+    IsVisible="showDeleteModal" 
+    Title="Delete Retiree" 
+    Message="@deleteModalMessage" 
+    ConfirmText="Delete" 
+    CancelText="Cancel" 
+    Type="ConfirmModal.ModalType.Danger"
+    OnConfirmed="ConfirmDelete" 
+    OnCancelled="CancelDelete" />
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @successMessage
+        <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @errorMessage
+        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+    </div>
+}
+
+@if (retirees == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!retirees.Any())
+{
+    <p>No retirees found.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Date of Birth</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var retiree in retirees)
+                {
+                    <tr>
+                        <td>@retiree.FirstName @retiree.LastName</td>
+                        <td>@retiree.Email</td>
+                        <td>@retiree.DateOfBirth.ToShortDateString()</td>
+                        <td>
+                            @if (retiree.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactive</span>
+                            }
+                        </td>
+                        <td>@retiree.CreatedAt.ToShortDateString()</td>
+                        <td>
+                            @if (retiree.IsActive)
+                            {
+                                <button class="btn btn-danger btn-sm" @onclick="() => ShowDeleteModal(retiree.RetireeId, retiree.FirstName, retiree.LastName)">
+                                    Delete
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-success btn-sm" @onclick="() => UndeleteRetiree(retiree.RetireeId)">
+                                    Restore
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Retiree>? retirees;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool showDeleteModal = false;
+    private int selectedRetireeId;
+    private string deleteModalMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRetirees();
+    }
+
+    private async Task LoadRetirees()
+    {
+        try
+        {
+            retirees = await Http.GetFromJsonAsync<List<Retiree>>("api/retirees");
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading retirees: {ex.Message}");
+            errorMessage = "Failed to load retirees. Please try again.";
+            retirees = new List<Retiree>();
+        }
+    }
+
+    private void ShowDeleteModal(int retireeId, string firstName, string lastName)
+    {
+        selectedRetireeId = retireeId;
+        deleteModalMessage = $"Are you sure you want to delete {firstName} {lastName}? This will mark them as inactive.";
+        showDeleteModal = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        showDeleteModal = false;
+        
+        try
+        {
+            var response = await Http.DeleteAsync($"api/retirees/{selectedRetireeId}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Retiree has been deleted successfully.";
+                errorMessage = null;
+                await LoadRetirees();
+            }
+            else
+            {
+                errorMessage = "Failed to delete retiree. Please try again.";
+                successMessage = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting retiree: {ex.Message}");
+            errorMessage = "An error occurred while deleting the retiree.";
+            successMessage = null;
+        }
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteModal = false;
+    }
+
+    private async Task UndeleteRetiree(int retireeId)
+    {
+        try
+        {
+            var response = await Http.PutAsync($"api/retirees/{retireeId}/undelete", null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Retiree has been restored successfully.";
+                errorMessage = null;
+                await LoadRetirees();
+            }
+            else
+            {
+                errorMessage = "Failed to restore retiree. Please try again.";
+                successMessage = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error restoring retiree: {ex.Message}");
+            errorMessage = "An error occurred while restoring the retiree.";
+            successMessage = null;
+        }
+    }
+}

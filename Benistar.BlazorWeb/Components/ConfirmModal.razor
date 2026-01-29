@@ -1,0 +1,81 @@
+@if (IsVisible)
+{
+    <div class="modal fade show" id="confirmModal" tabindex="-1" role="dialog" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalDesc" style="display: block;" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">                
+                <div class="modal-header @GetHeaderClass()" style="@GetHeaderStyle()">
+                    <h5 class="modal-title" id="confirmModalTitle">@Title</h5>
+                    <button type="button" class="btn-close @GetCloseButtonClass()" @onclick="OnCancel" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="confirmModalDesc">
+                    @Message
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="OnCancel">@CancelText</button>
+                    <button type="button" class="btn @GetConfirmButtonClass()" @onclick="OnConfirm">@ConfirmText</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm";
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public ModalType Type { get; set; } = ModalType.Danger;
+    [Parameter] public EventCallback OnConfirmed { get; set; }
+    [Parameter] public EventCallback OnCancelled { get; set; }
+
+    private async Task OnConfirm()
+    {
+        await OnConfirmed.InvokeAsync();
+    }
+
+    private async Task OnCancel()
+    {
+        await OnCancelled.InvokeAsync();
+    }
+
+    private string GetHeaderClass()
+    {
+        return Type switch
+        {
+            ModalType.Danger => "text-white",
+            ModalType.Warning => "bg-warning text-dark",
+            ModalType.Info => "bg-info text-white",
+            _ => "bg-primary text-white"
+        };
+    }
+
+    private string GetHeaderStyle()
+    {
+        return Type == ModalType.Danger ? "background-color: #6f42c1;" : "";
+    }
+
+    private string GetCloseButtonClass()
+    {
+        return Type == ModalType.Warning ? "" : "btn-close-white";
+    }
+
+    private string GetConfirmButtonClass()
+    {
+        return Type switch
+        {
+            ModalType.Danger => "btn-danger",
+            ModalType.Warning => "btn-warning",
+            ModalType.Info => "btn-info",
+            _ => "btn-danger"
+        };
+    }
+
+    public enum ModalType
+    {
+        Danger,
+        Warning,
+        Info
+    }
+}

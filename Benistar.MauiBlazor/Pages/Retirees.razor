@@ -1,0 +1,28 @@
+
+@page "/"
+@inject HttpClient Http
+
+<h1>Retirees</h1>
+
+@if (retirees == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <ul>
+        @foreach (var r in retirees)
+        {
+            <li>@r.FirstName @r.LastName - @r.Email</li>
+        }
+    </ul>
+}
+
+@code {
+    List<Benistar.Shared.Retiree>? retirees;
+
+    protected override async Task OnInitializedAsync()
+    {
+        retirees = await Http.GetFromJsonAsync<List<Benistar.Shared.Retiree>>("api/retirees");
+    }
+}
