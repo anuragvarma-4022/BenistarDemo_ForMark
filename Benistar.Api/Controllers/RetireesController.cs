@@ -12,42 +12,72 @@ public class RetireesController : ControllerBase
     public RetireesController(BenefitsDbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<IActionResult> Get() =>
-        Ok(await _db.Retirees.ToListAsync());
+    public async Task<IActionResult> Get()
+    {
+        try
+        {
+            return Ok(await _db.Retirees.ToListAsync());
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal server error: {ex.Message}");
+        }
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create(Retiree retiree)
     {
-        _db.Retirees.Add(retiree);
-        await _db.SaveChangesAsync();
-        return Ok(retiree);
+        try
+        {
+            _db.Retirees.Add(retiree);
+            await _db.SaveChangesAsync();
+            return Ok(retiree);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal server error: {ex.Message}");
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var retiree = await _db.Retirees.FindAsync(id);
-        
-        if (retiree == null)
-            return NotFound();
-        
-        retiree.IsActive = false;
-        await _db.SaveChangesAsync();
-        
-        return NoContent();
+        try
+        {
+            var retiree = await _db.Retirees.FindAsync(id);
+            
+            if (retiree == null)
+                return NotFound();
+            
+            retiree.IsActive = false;
+            await _db.SaveChangesAsync();
+            
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal server error: {ex.Message}");
+        }
     }
 
     [HttpPut("{id}/undelete")]
     public async Task<IActionResult> Undelete(int id)
     {
-        var retiree = await _db.Retirees.FindAsync(id);
-        
-        if (retiree == null)
-            return NotFound();
-        
-        retiree.IsActive = true;
-        await _db.SaveChangesAsync();
-        
-        return NoContent();
+        try
+        {
+            var retiree = await _db.Retirees.FindAsync(id);
+            
+            if (retiree == null)
+                return NotFound();
+            
+            retiree.IsActive = true;
+            await _db.SaveChangesAsync();
+            
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal server error: {ex.Message}");
+        }
     }
 }
